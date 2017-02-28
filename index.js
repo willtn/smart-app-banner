@@ -63,7 +63,11 @@ var SmartBanner = function (options) {
     itunesAppId: '',
     playAppId: '',
     msAppId: '',
-    layer: true
+    layer: true,
+    fallbackLink: '',
+    link: function () {},
+    forceOnIos: false,
+    debug: false
   }, options || {});
 
   if (this.options.force) {
@@ -82,7 +86,7 @@ var SmartBanner = function (options) {
   // - running on standalone mode
   // - user dismissed banner
   var unsupported = !this.type;
-  var isMobileSafari = (this.type === 'ios' && agent.browser.name === 'Mobile Safari' && Number(agent.os.version) >= 6);
+  var isMobileSafari = (this.type === 'ios' && agent.browser.name === 'Mobile Safari' && Number(agent.os.version) >= 6) && !this.options.orceOnIos;
   var runningStandAlone = navigator.standalone;
   var userDismissed = cookie.get('smartbanner-closed');
   var userInstalled = cookie.get('smartbanner-installed');
@@ -135,7 +139,7 @@ SmartBanner.prototype = {
                 '<div>' + this.options.author + '</div>' +
                 '<span>' + inStore + '</span>' +
               '</div>' +
-              '<a href="' + link + '" class="smartbanner-button">' +
+              '<a class="smartbanner-button">' +
                 '<span class="smartbanner-button-text">' + this.options.button + '</span>' +
               '</a>' +
             '</div>';
@@ -167,17 +171,23 @@ SmartBanner.prototype = {
   },
   close: function () {
     this.hide();
-    cookie.set('smartbanner-closed', 'true', {
-      path: '/',
-      expires: new Date(Number(new Date()) + (this.options.daysHidden * 1000 * 60 * 60 * 24))
-    });
+    if (!this.options.debug) {
+      cookie.set('smartbanner-closed', 'true', {
+        path: '/',
+        expires: new Date(Number(new Date()) + (this.options.daysHidden * 1000 * 60 * 60 * 24))
+      });
+    }
   },
   install: function () {
     this.hide();
-    cookie.set('smartbanner-installed', 'true', {
-      path: '/',
-      expires: new Date(Number(new Date()) + (this.options.daysReminder * 1000 * 60 * 60 * 24))
-    });
+    this.launch();
+
+    if (!this.options.debug) {
+      cookie.set('smartbanner-installed', 'true', {
+        path: '/',
+        expires: new Date(Number(new Date()) + (this.options.daysReminder * 1000 * 60 * 60 * 24))
+      });
+    }
   },
   parseAppId: function () {
     this.appId = this.parseAppIdFromOptions() || this.parseAppIdFromMeta();
@@ -200,6 +210,56 @@ SmartBanner.prototype = {
     }
 
     return appId;
+  },
+  setLocation: function(e) {
+    doc.location = e;
+  },
+  openApp: function (link) {
+    this.setLocation(link);
+  },
+  goToAppStore: function () {
+    this.setLocation(this.getStoreLink());
+  },
+  launch: function () {
+    var that = this;
+    if (!that.appStoreTimer) { // No pending timer
+      var link = that.getNativeAppLink();
+
+      if (link) {
+        that.openApp(link);
+        var timesnap = Date.now();
+        that.heartbeatTimer = setInterval(function () {
+          if (that.isDocumentHidden()) {
+            that.clearTimers();
+          }
+        }, 200);
+        that.appStoreTimer = setTimeout(function () {
+          if (!that.isDocumentHidden() && (Date.now() - timesnap < 1500)) { // document not hidden and timeout expired
+            that.clearTimers();
+            that.goToAppStore();
+          }
+        }, 1000);
+      } else {
+        that.goToAppStore();
+      }
+    }
+  },
+  clearTimers: function () {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      delete this.heartbeatTimer;
+    }
+
+    if (this.appStoreTimer) {
+      clearTimeout(this.appStoreTimer);
+      delete this.appStoreTimer;
+    }
+  },
+  getNativeAppLink: function () {
+    return this.options.link() || this.options.fallbackLink;
+  },
+  isDocumentHidden: function () {
+    return doc.webkitHidden || doc.hidden;
   }
 };
 
