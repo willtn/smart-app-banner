@@ -62,7 +62,8 @@ var SmartBanner = function (options) {
     force: '', // put platform type ('ios', 'android', etc.) here for emulation
     itunesAppId: '',
     playAppId: '',
-    msAppId: ''
+    msAppId: '',
+    layer: true
   }, options || {});
 
   if (this.options.force) {
@@ -96,8 +97,6 @@ var SmartBanner = function (options) {
   if (!this.parseAppId()) {
     return;
   }
-
-  console.warn('')
 
   this.create();
   this.show();
@@ -143,15 +142,22 @@ SmartBanner.prototype = {
 
     // there isn’t neccessary a body
     if (doc.body) {
-      doc.body.appendChild(sb);
-    }   else if (doc) {
+      this.addBanner(doc.body, sb);
+    } else if (doc) {
       doc.addEventListener('DOMContentLoaded', function () {
-        doc.body.appendChild(sb);
+        this.addBanner(doc.body, sb);
       });
     }
 
     q('.smartbanner-button', sb).addEventListener('click', this.install.bind(this), false);
     q('.smartbanner-close', sb).addEventListener('click', this.close.bind(this), false);
+  },
+  addBanner: function (element, smartbanner) {
+    if (this.options.layer) {
+      element.append(smartbanner);
+    } else {
+      element.prepend(smartbanner);
+    }
   },
   hide: function () {
     root.classList.remove('smartbanner-show');
@@ -181,18 +187,19 @@ SmartBanner.prototype = {
     return this.options[this.appOption];
   },
   parseAppIdFromMeta: function () {
+    var appId;
     var meta = q('meta[name="' + this.appMeta + '"]');
     if (!meta) {
       return;
     }
 
     if (this.type === 'windows') {
-      this.appId = meta.getAttribute('content');
+      appId = meta.getAttribute('content');
     } else {
-      this.appId = /app-id=([^\s,]+)/.exec(meta.getAttribute('content'))[1];
+      appId = /app-id=([^\s,]+)/.exec(meta.getAttribute('content'))[1];
     }
 
-    return this.appId;
+    return appId;
   }
 };
 
